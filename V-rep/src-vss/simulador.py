@@ -8,9 +8,9 @@ class Enviroment:
 		if self.clientID == -1:
 			exit()
 		self.num_robots = num_robots
-		self.leftMotorHandle = [0]*self.num_robots
-		self.rightMotorHandle = [0]*self.num_robots
-		for i in range(1, self.num_robots*2, 2):
+		self.leftMotorHandle = [0]*self.num_robots*num_campos*2
+		self.rightMotorHandle = [0]*self.num_robots*num_campos*2
+		for i in range(1, self.num_robots*2*num_campos*2, 2):
 			resLeft, leftMotorHandle[(i-1)/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
 			resRight, rightMotorHandle[(i-1)/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
 			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok:
@@ -28,10 +28,18 @@ class Enviroment:
 	def close():
 		#não sei
 
-	def get_state():
-		#retorna vetor com entrada para rede neural
+	def get_state(team_id):
+		#get motor handles from team team_id
+		my_robots_leftMotor = [leftMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
+		my_robots_rightMotor = [rightMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
 
-	def get_reward():
+		state = [0.] * self.state_size
+		
+
+		#retorna vetor com entrada para rede neural
+		
+
+	def get_reward(team_id):
 		#função bonitinha
 		'''
 			Virar para a bola -> cos(atan2(Ybola-Yrobô, Xbola-Xrobô)-GAMMArobô)

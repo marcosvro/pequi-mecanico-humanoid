@@ -36,7 +36,7 @@ class A3CAgent:
 		self.actor, self.critic = self.build_model()
 
 		# method for training actor and critic network
-		self.optimizer = [self.actor_optimizer(), self.critic_optimizer()]
+		self.optimizer = [self.actor_optimizer(), self.critic_optimizer(), False]
 
 		self.sess = tf.InteractiveSession()
 		K.set_session(self.sess)
@@ -105,7 +105,7 @@ class A3CAgent:
 
 	# make agents(local) and start training
 	def train(self):
-		# self.load_model('./save_model/cartpole_a3c.h5')
+		# self.load_model('./save_model/vss_a3c')
 		agents = [Agent(i, self.actor, self.critic, self.optimizer, self.discount_factor, self.action_size, self.state_size, self.env) for i in range(self.threads)]
 
 		for agent in agents:
@@ -116,9 +116,8 @@ class A3CAgent:
 
 			plot = scores[:]
 			pylab.plot(range(len(plot)), plot, 'b')
-			pylab.savefig("./save_graph/cartpole_a3c.png")
-
-			self.save_model('./save_model/cartpole_a3c.h5')
+			pylab.savefig("./save_graph/vss_a3c.png")
+			self.save_model('./save_model/vss_a3c')
 
 	def save_model(self, name):
 		self.actor.save_weights(name + "_actor.h5")
@@ -158,15 +157,15 @@ class Agent(threading.Thread):
 				time.sleep(5)
 				team_id = self.env.get_team()		
 
-			camPlay = self.env.reset(indice)
+			camPlay = self.env.reset(team_id)
 			while not camPlay:
 				time.sleep(1)
-				camPlay = self.env.reset(indice)
+				camPlay = self.env.reset(team_id)
 
 			score = 0
-			state = self.env.get_state()
+			state = self.env.get_state(team_id)
 			action = self.get_action()
-			fez_gol = False
+			tomou_gol = False
 			while True:
 				#action = self.get_action(state)
 				#next_state, reward, done, _ = env.step(action)
@@ -174,7 +173,7 @@ class Agent(threading.Thread):
 				self.env.apply_action(team_id, action)
 				time.sleep(self.env.time_step_action)
 
-				fez_gol, acabou, reward = self.env.get_reward()
+				tomou_gol, acabou, reward = self.env.get_reward(team_id)
 				self.memory(state, action, reward)
 
 				#state = next_state
@@ -184,17 +183,18 @@ class Agent(threading.Thread):
 					scores.append(score)
 					break
 				else:
-					state=self.env.get_state()
+					state=self.env.get_state(team_id)
 					action=self.get_action()
 					
-			self.train_episode(fez_gol)
+			self.train_episode(tomou_gol)
 
 	# In Policy Gradient, Q function is not available.
 	# Instead agent uses sample returns for evaluating policy
-	def discount_rewards(self, rewards, fez_gol=True):
+	def discount_rewards(self, rewards, tomou_gol=True):
 		discounted_rewards = np.zeros_like(rewards)
 		running_add = 0
-		if not fez_gol:
+		if not tomou_gol:
+			#se não tomou gol ainda há recompensa para receber(valor predito por running_add)
 			running_add = self.critic.predict(np.reshape(self.states[-1], (1, self.state_size)))[0]
 		for t in reversed(range(0, len(rewards))):
 			running_add = running_add * self.discount_factor + rewards[t]
@@ -211,21 +211,26 @@ class Agent(threading.Thread):
 		self.rewards.append(reward)
 
 	# update policy network and value network every episode
-	def train_episode(self, fez_gol):
-		discounted_rewards = self.discount_rewards(self.rewards, fez_gol)
+	def train_episode(self, tomou_gol):
+		discounted_rewards = self.discount_rewards(self.rewards, tomou_gol)
 
 		values = self.critic.predict(np.array(self.states))
 		values = np.reshape(values, len(values))
 
 		advantages = discounted_rewards - values
 
+		while self.optimizer[2]:
+			time.sleep(0.5)
+		self.optimizer[2] = True
 		self.optimizer[0]([self.states, self.actions, advantages])
 		self.optimizer[1]([self.states, discounted_rewards])
+		self.optimizer[2] = False
 		self.states, self.actions, self.rewards = [], [], []
 
 	def get_action(self, state):
 		policy = self.actor.predict(np.reshape(state, [1, self.state_size]))[0]
-		return np.random.choice(self.action_size, 1, p=policy)[0]
+		return policy
+		#return np.random.choice(self.action_size, 1, p=policy)[0]
 
 
 if __name__ == "__main__":
