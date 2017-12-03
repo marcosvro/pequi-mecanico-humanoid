@@ -166,6 +166,7 @@ class Agent(threading.Thread):
 			score = 0
 			state = self.env.get_state()
 			action = self.get_action()
+			fez_gol = False
 			while True:
 				#action = self.get_action(state)
 				#next_state, reward, done, _ = env.step(action)
@@ -173,27 +174,27 @@ class Agent(threading.Thread):
 				self.env.apply_action(team_id, action)
 				time.sleep(self.env.time_step_action)
 
-				done, reward = self.env.get_reward()
+				fez_gol, acabou, reward = self.env.get_reward()
 				self.memory(state, action, reward)
 
 				#state = next_state
-				if done:
+				if acabou:
 					episode += 1
 					print("episode: ", episode, "/ score : ", score)
 					scores.append(score)
 					break
 				else:
 					state=self.env.get_state()
-					action=self.get_actiob()
+					action=self.get_action()
 					
-			self.train_episode()
+			self.train_episode(fez_gol)
 
 	# In Policy Gradient, Q function is not available.
 	# Instead agent uses sample returns for evaluating policy
-	def discount_rewards(self, rewards, done=True):
+	def discount_rewards(self, rewards, fez_gol=True):
 		discounted_rewards = np.zeros_like(rewards)
 		running_add = 0
-		if not done:
+		if not fez_gol:
 			running_add = self.critic.predict(np.reshape(self.states[-1], (1, self.state_size)))[0]
 		for t in reversed(range(0, len(rewards))):
 			running_add = running_add * self.discount_factor + rewards[t]
@@ -210,8 +211,8 @@ class Agent(threading.Thread):
 		self.rewards.append(reward)
 
 	# update policy network and value network every episode
-	def train_episode(self):
-		discounted_rewards = self.discount_rewards(self.rewards)
+	def train_episode(self, fez_gol):
+		discounted_rewards = self.discount_rewards(self.rewards, fez_gol)
 
 		values = self.critic.predict(np.array(self.states))
 		values = np.reshape(values, len(values))
