@@ -8,18 +8,22 @@ class Enviroment:
 		if self.clientID == -1:
 			exit()
 		self.num_robots = num_robots
+		self.robotObjectHandle = [0]*self.num_robots*num_campos*2
+		self.robotOrientationtHandle = [0]*self.num_robots*num_campos*2
 		self.leftMotorHandle = [0]*self.num_robots*num_campos*2
 		self.rightMotorHandle = [0]*self.num_robots*num_campos*2
-		for i in range(1, self.num_robots*2*num_campos*2, 2):
-			resLeft, leftMotorHandle[(i-1)/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
-			resRight, rightMotorHandle[(i-1)/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
-			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok:
+		for i in range(self.num_robots*2*num_campos*2, 2):
+			resBase, robotObjectHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "robo"+str(i/2), vrep.simx_opmode_oneshot_wait)
+			resOrien, robotOrientationtHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "Orientacao"+str(i/2), vrep.simx_opmode_oneshot_wait)
+			resLeft, leftMotorHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
+			resRight, rightMotorHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
+			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok:
 				exit()
 		self.state_size = self.num_robots*5 + self.num_robots*2*2 + 3
 		self.action_size = 2*self.num_robots
 		self.max_velocity = max_velocity
-		self.max_width = 1.5/2.
-		self.max_height = 1.3/2.
+		self.max_width = 0.9
+		self.max_height = 0.64
 		self.num_campos = num_campos
 		self.campo = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
@@ -32,8 +36,12 @@ class Enviroment:
 		#get motor handles from team team_id
 		my_robots_leftMotor = [leftMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
 		my_robots_rightMotor = [rightMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
+		my_robots_handle = [robotOrientationtHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
+		enemy_robot_handle =
 
 		state = [0.] * self.state_size
+		for i in range(self.num_robots):
+			vrep.simxGetObjectPosition()
 		
 
 		#retorna vetor com entrada para rede neural
