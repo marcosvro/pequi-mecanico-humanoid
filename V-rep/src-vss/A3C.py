@@ -241,4 +241,3 @@ if __name__ == "__main__":
 
 	global_agent = A3CAgent(state_size, action_size, env)
 	global_agent.train()
-	env.close()

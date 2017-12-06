@@ -12,15 +12,17 @@ class Enviroment:
 		self.robotOrientationtHandle = [0]*self.num_robots*num_campos*2
 		self.leftMotorHandle = [0]*self.num_robots*num_campos*2
 		self.rightMotorHandle = [0]*self.num_robots*num_campos*2
-		self.ball
+		resBall, self.ballObjectHandle = vrep.simxGetObjectHandle(self.clientID, "bola", vrep.simx_opmode_oneshot_wait)
+		if resBall:
+			exit()
 		for i in range(self.num_robots*2*num_campos*2, 2):
-			resBase, robotObjectHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "robo"+str(i/2), vrep.simx_opmode_oneshot_wait)
-			resOrien, robotOrientationtHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "Orientacao"+str(i/2), vrep.simx_opmode_oneshot_wait)
-			resLeft, leftMotorHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
-			resRight, rightMotorHandle[i/2] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
+			resBase, robotObjectHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "robo"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
+			resOrien, robotOrientationtHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "Orientacao"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
+			resLeft, leftMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
+			resRight, rightMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
 			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok:
 				exit()
-		self.state_size = self.num_robots*5 + self.num_robots*2*2 + 3
+		self.state_size = (self.num_robots*2 + self.num_robots*2*2 + 2)*2
 		self.action_size = 2*self.num_robots
 		self.max_velocity = max_velocity
 		self.max_width = 0.9
@@ -33,7 +35,7 @@ class Enviroment:
 	def close():
 		#não sei
 
-	def get_state(team_id):
+	def get_state(team_id, last_state = []):
 		#get motor handles from team team_id
 		my_robots_leftMotor = [self.leftMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
 		my_robots_rightMotor = [self.rightMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
@@ -42,9 +44,10 @@ class Enviroment:
 		if team_id%2==0:
 			enemy_robot_handle = [self.robotOrientationtHandle[(team_id+1)*self.num_robots + i] for i in range(self.num_robots)]
 		else :
-			enemy_robot_handle = [self.robotOrientationtHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
+			enemy_robot_handle = [self.robotOrientationtHandle[(team_id-1)*self.num_robots + i] for i in range(self.num_robots)]
 
-		state = [0.] * self.state_size
+			
+		state = [0.] * (int(self.state_size/2))
 		init = 0
 		#geting my robots positions
 		for i in range(self.num_robots):
@@ -62,7 +65,7 @@ class Enviroment:
 			state[init+i] = g/180.
 		#geting enemy robots positions
 		init += self.num_robots
-		for i in range(self.num_robots)
+		for i in range(self.num_robots):
 			ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_streaming)
 			while ret != vrep.simx_return_ok):
 				ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_streaming)
@@ -75,13 +78,21 @@ class Enviroment:
 			while ret != vrep.simx_return_ok):
 				ret,a,b,g = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_streaming)
 			state[init+i] = g/180.
-		#geting left wheel velocity
+		#geting ball position
 		init += self.num_robots
-		
-		#geting right wheel velocity
-		init += self.num_robots
+		ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,ballObjectHandle,operationMode=vrep.simx_opmode_streaming)
+		while ret != vrep.simx_return_ok):
+			ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,ballObjectHandle,operationMode=vrep.simx_opmode_streaming)
+		state[init] = y/self.max_width
+		state[init+1] = x/self.max_height
 
-		#retorna vetor com entrada para rede neural
+
+		if len(last_state) != 0:
+			state = last_state[int(self.state_size/2):]+state
+		else:
+			state = state+state
+		
+		return state
 		
 
 	def get_reward(team_id):
@@ -96,7 +107,7 @@ class Enviroment:
 	def get_team():
 		indice = -1
 		for i in range(len(self.team)):
-			if not self.team[i]:
+			if self.team[i] == 0:
 				team[i] = 1
 				indice = i
 				break
