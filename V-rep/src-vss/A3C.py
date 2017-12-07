@@ -164,7 +164,7 @@ class Agent(threading.Thread):
 
 			score = 0
 			state = self.env.get_state(team_id)
-			action = self.get_action()
+			action = self.get_action(state)
 			tomou_gol = False
 			while True:
 				#action = self.get_action(state)
@@ -184,7 +184,7 @@ class Agent(threading.Thread):
 					break
 				else:
 					state=self.env.get_state(team_id)
-					action=self.get_action()
+					action=self.get_action(state)
 					
 			self.train_episode(tomou_gol)
 
