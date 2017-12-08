@@ -155,7 +155,7 @@ class Agent(threading.Thread):
 			team_id = self.env.get_team()
 			while team_id == -1:
 				time.sleep(5)
-				team_id = self.env.get_team()		
+				team_id = self.env.get_team()	
 
 			camPlay = self.env.reset(team_id)
 			while not camPlay:
@@ -176,15 +176,14 @@ class Agent(threading.Thread):
 				tomou_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
 				self.memory(state, action, reward)
 
-				#state = next_state
 				if acabou:
 					episode += 1
 					print("episode: ", episode, "/ score : ", score)
 					scores.append(score)
 					break
 				else:
-					state=self.env.get_state(team_id)
-					action=self.get_action(state)
+					state = next_state
+					action = self.get_action(state)
 					
 			self.train_episode(tomou_gol)
 

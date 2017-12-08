@@ -17,7 +17,7 @@ class Enviroment:
 			exit()
 		for i in range(self.num_robots*2*num_campos*2, 2):
 			resBase, robotObjectHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "robo"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
-			resOrien, robotOrientationtHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "Orientacao"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
+			resOrien, robotOrientationtHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "orientacao"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
 			resLeft, leftMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
 			resRight, rightMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
 			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok:
@@ -104,9 +104,28 @@ class Enviroment:
 			Mira bola p/ gol  -> 1 - abs(atan2(Ybola-Yrobô, Xbola-Xrobô)-atan2(Ygol-Ybola, Xgol-Xbola))/pi
 			Leva bola p/ gol  -> 1 - DISTÂNCIA_bg/sqrt((2*width)**2+(2*height)**2)
 		'''
+		x_gol = 0
+		y_gol = 0.9
+		if team_id%2 != 0:
+			y_gol = -y_gol
 		result_state = self.get_state(last_state)
-		reward = weight_rewards[0]*np.cos(np.atan2(result_state[6*self.num_robots]-result_state[0],result_state[6*self.num_robots+1]-result_state[1]))
-		reward +=
+		reward = weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)-result_state[2*self.num_robots]*math.pi)
+		reward += weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)**2)/math.sqrt((2*self.width)**2+(2*self.height)**2))
+		reward += weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)-math.atan2(y_gol-result_state[int(self.state_size/2)+6*self.num_robots]*self.width, x_gol-result_state[int(self.state_size/2)+6*self.num_robots+1]*self.height))/math.pi)
+		reward += weight_rewards[3]*(1 - math.sqrt((result_state[int(self.state_size/2)+6*self.num_robots]*self.width-y_gol)**2+(result_state[int(self.state_size/2)+6*self.num_robots+1]*self.height-x_gol)**2) / math.sqrt((2*self.width)**2+(2*self.height)**2))
+
+		acabou = False
+		tomei_gol = False
+		
+		
+		
+		if "ALGUEM FEZ GOL":
+			acabou = True
+			if "Tomei gol":
+				tomei_gol = True
+
+		return tomei_gol, acabou, reward, result_state
+			
 
 	def get_team():
 		indice = -1
