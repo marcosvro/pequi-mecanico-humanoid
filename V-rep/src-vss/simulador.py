@@ -31,6 +31,7 @@ class Enviroment:
 		self.campo = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
 		self.time_step_action = 0.1
+		self.weight_rewards = [0.17, 0.17, 0.33, 0.33]
 
 	def close():
 		#não sei
@@ -95,7 +96,7 @@ class Enviroment:
 		return state
 		
 
-	def get_reward(team_id):
+	def get_reward(self,team_id, last_state):
 		#função bonitinha
 		'''
 			Virar para a bola -> cos(atan2(Ybola-Yrobô, Xbola-Xrobô)-GAMMArobô)
@@ -103,6 +104,9 @@ class Enviroment:
 			Mira bola p/ gol  -> 1 - abs(atan2(Ybola-Yrobô, Xbola-Xrobô)-atan2(Ygol-Ybola, Xgol-Xbola))/pi
 			Leva bola p/ gol  -> 1 - DISTÂNCIA_bg/sqrt((2*width)**2+(2*height)**2)
 		'''
+		result_state = self.get_state(last_state)
+		reward = weight_rewards[0]*np.cos(np.atan2(result_state[6*self.num_robots]-result_state[0],result_state[6*self.num_robots+1]-result_state[1]))
+		reward +=
 
 	def get_team():
 		indice = -1

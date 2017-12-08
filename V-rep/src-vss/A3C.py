@@ -173,7 +173,7 @@ class Agent(threading.Thread):
 				self.env.apply_action(team_id, action)
 				time.sleep(self.env.time_step_action)
 
-				tomou_gol, acabou, reward = self.env.get_reward(team_id)
+				tomou_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
 				self.memory(state, action, reward)
 
 				#state = next_state
