@@ -178,13 +178,14 @@ class Agent(threading.Thread):
 
 				if acabou:
 					episode += 1
+					self.env.free_team(team_id)
 					print("episode: ", episode, "/ score : ", score)
 					scores.append(score)
 					break
 				else:
 					state = next_state
 					action = self.get_action(state)
-					
+			
 			self.train_episode(tomou_gol)
 
 	# In Policy Gradient, Q function is not available.

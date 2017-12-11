@@ -12,10 +12,16 @@ class Enviroment:
 		self.robotOrientationtHandle = [0]*self.num_robots*num_campos*2
 		self.leftMotorHandle = [0]*self.num_robots*num_campos*2
 		self.rightMotorHandle = [0]*self.num_robots*num_campos*2
+		self.golDistHandle = [0]*num_campos*2
+		for i int range(0,num_campos*2, 2):
+			resGolTime0, golDistHandle[i] =  simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i*2),vrep.simx_opmode_oneshot_wait)
+			resGolTime1, golDistHandle[i+1] = simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i*2+1),vrep.simx_opmode_oneshot_wait)
+			if resGolTime0 or resGolTime1:
+				exit()
 		resBall, self.ballObjectHandle = vrep.simxGetObjectHandle(self.clientID, "bola", vrep.simx_opmode_oneshot_wait)
 		if resBall:
 			exit()
-		for i in range(self.num_robots*2*num_campos*2, 2):
+		for i in range(0, self.num_robots*2*num_campos*2, 2):
 			resBase, robotObjectHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "robo"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
 			resOrien, robotOrientationtHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "orientacao"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
 			resLeft, leftMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
@@ -27,6 +33,7 @@ class Enviroment:
 		self.max_velocity = max_velocity
 		self.max_width = 0.9
 		self.max_height = 0.64
+		self.min_dist_gol = 0.13
 		self.num_campos = num_campos
 		self.campo = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
@@ -106,8 +113,12 @@ class Enviroment:
 		'''
 		x_gol = 0
 		y_gol = 0.9
+		enemy_id = 0
 		if team_id%2 != 0:
 			y_gol = -y_gol
+			enemy_id = team_id+1
+		else:
+			enemy_id = team_id-1
 		result_state = self.get_state(last_state)
 		reward = weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)-result_state[2*self.num_robots]*math.pi)
 		reward += weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)**2)/math.sqrt((2*self.width)**2+(2*self.height)**2))
@@ -117,6 +128,7 @@ class Enviroment:
 		acabou = False
 		tomei_gol = False
 		
+		# verifica se alguem fez gol
 		
 		
 		if "ALGUEM FEZ GOL":
@@ -127,26 +139,26 @@ class Enviroment:
 		return tomei_gol, acabou, reward, result_state
 			
 
-	def get_team():
+	def get_team(self):
 		indice = -1
 		for i in range(len(self.team)):
-			if self.team[i] == 0:
-				team[i] = 1
+			if self.team[i] == 0 and not self.campo[int(i/2)]:
+				self.team[i] = 1
 				indice = i
 				break
 		return indice
 
-	def reset(team_id):
-		if campo[int(team_id/2)]:
+	def reset(self,team_id):
+		if self.campo[int(team_id/2)]:
 			return True
 		ver = 0
 		if team_id%2 == 0:
 			ver = team_id+1
 		else:
 			ver = team_id-1
-		if team[ver] == 1:
+		if self.team[ver] == 1:
 			#RESETAR POSIÇÕES E AÇÃO -----------------------------------------------------------------------------------------------------------
-			campo[int(ver/2)] = True
+			self.campo[int(ver/2)] = True
 			return True
 		else:
 			return False
