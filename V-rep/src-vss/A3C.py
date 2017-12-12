@@ -1,9 +1,7 @@
 import threading
 import numpy as np
 import tensorflow as tf
-import pylab
 import time
-import gym
 import simulador as sim
 from keras.layers import Dense, Input
 from keras.models import Model
@@ -113,10 +111,7 @@ class A3CAgent:
 
 		while True:
 			time.sleep(20)
-
 			plot = scores[:]
-			pylab.plot(range(len(plot)), plot, 'b')
-			pylab.savefig("./save_graph/vss_a3c.png")
 			self.save_model('./save_model/vss_a3c')
 
 	def save_model(self, name):
@@ -234,10 +229,12 @@ class Agent(threading.Thread):
 
 
 if __name__ == "__main__":
-	env = sim.Enviroment("127.0.0.1", 19999, 1, 600)
+	env = sim.Enviroment("127.0.0.1", 19999, 1, 600, 1)
 
 	state_size = env.state_size
 	action_size = env.action_size
 
 	global_agent = A3CAgent(state_size, action_size, env)
 	global_agent.train()
+	env.close()
+
