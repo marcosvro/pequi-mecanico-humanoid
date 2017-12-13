@@ -242,7 +242,7 @@ if __name__ == "__main__":
 	team2 = env.get_team()
 	env.reset(team)
 	state = env.get_state(team)
-	env.apply_action(team, [-0.5,0.1])
+	env.apply_action(team, [1.,1.])
 	tomei_gol, acabou, reward, result_state = env.get_reward(team, state)
 
 	env.close()

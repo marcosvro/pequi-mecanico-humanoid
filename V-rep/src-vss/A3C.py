@@ -229,7 +229,7 @@ class Agent(threading.Thread):
 
 
 if __name__ == "__main__":
-	env = sim.Enviroment("127.0.0.1", 19999, 1, 600, 1)
+	env = sim.Enviroment("127.0.0.1", 19999, 1, 9, 1)
 
 	state_size = env.state_size
 	action_size = env.action_size
