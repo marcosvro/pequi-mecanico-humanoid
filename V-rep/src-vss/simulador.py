@@ -14,6 +14,8 @@ class Enviroment:
 		self.robotOrientationtHandle = [0]*self.num_robots*num_campos*2
 		self.leftMotorHandle = [0]*self.num_robots*num_campos*2
 		self.rightMotorHandle = [0]*self.num_robots*num_campos*2
+		self.leftRodaHandle = [0]*self.num_robots*num_campos*2
+		self.rightRodaHandle = [0]*self.num_robots*num_campos*2
 		self.golDistHandle = [0]*num_campos*2
 		for i in range(0,num_campos*2, 2):
 			resGolTime0, self.golDistHandle[i] =  vrep.simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i*2),vrep.simx_opmode_oneshot_wait)
@@ -28,7 +30,9 @@ class Enviroment:
 			resOrien, self.robotOrientationtHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "orientacao"+str(int(i/2)), vrep.simx_opmode_oneshot_wait)
 			resLeft, self.leftMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i+1), vrep.simx_opmode_oneshot_wait)
 			resRight, self.rightMotorHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "motor"+str(i), vrep.simx_opmode_oneshot_wait)
-			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok:
+			resLeftR, self.leftRodaHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "Cylinder"+str(i+1), vrep.simx_opmode_oneshot_wait)
+			resRightR, self.rightRodaHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "Cylinder"+str(i), vrep.simx_opmode_oneshot_wait)
+			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok or resLeftR != vrep.simx_return_ok or resRightR != vrep.simx_return_ok:
 				exit()
 		self.state_size = (self.num_robots*2 + self.num_robots*2*2 + 2)*2
 		self.action_size = 2*self.num_robots
@@ -182,7 +186,7 @@ class Enviroment:
 			#RESETAR POSIÇÕES E AÇÃO -----------------------------------------------------------------------------------------------------------
 			self.campo[int(enemy_id/2)] = True
 			alocados = []
-			for i in range(self.num_robots*2):
+			for i in range(self.num_robots*2+1):
 				flag = False
 				while not flag:
 					x = 2*(self.max_height-self.raio_robo)*np.random.random() - (self.max_height-self.raio_robo)
@@ -196,18 +200,33 @@ class Enviroment:
 					if flag:
 						alocados.append((x,y,self.z))
 			
+			self.apply_action(team_id, [0.]*self.action_size)
+			self.apply_action(enemy_id, [0.]*self.action_size)
 			for i in range(self.num_robots):
 				ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
 				ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
-				if ret != vrep.simx_return_ok or ret1 != vrep.simx_return_ok:
+				
+				#ret6 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, [-89.,0.,-89.], operationMode=vrep.simx_opmode_oneshot_wait)
+				#ret7 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, [-89.,0.,-89.], operationMode=vrep.simx_opmode_oneshot_wait)
+				
+				ret2 = vrep.simxSetObjectPosition(self.clientID, self.leftRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret3 = vrep.simxSetObjectPosition(self.clientID, self.rightRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret4 = vrep.simxSetObjectPosition(self.clientID, self.leftRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret5 = vrep.simxSetObjectPosition(self.clientID, self.rightRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				
+				if ret != vrep.simx_return_ok or ret1 != vrep.simx_return_ok or ret2 != vrep.simx_return_ok or ret3 != vrep.simx_return_ok or ret4 != vrep.simx_return_ok or ret5 != vrep.simx_return_ok:
 					exit()
+			ret = vrep.simxSetObjectPosition(self.clientID, self.ballObjectHandle,-1, position=alocados[-1], operationMode=vrep.simx_opmode_oneshot_wait)
+			if ret != vrep.simx_return_ok:
+				exit()			
 			return True
 		else:
 			return False
 
 	def apply_action(self,team_id, action):
 		#aplica ação nos robôs
-		action = action*self.max_velocity
+		action = np.array(action)*self.max_velocity
+		print (action)
 		for i in range(self.num_robots):
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.leftMotorHandle[team_id*self.num_robots+i], action[i*2], vrep.simx_opmode_oneshot_wait)
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.rightMotorHandle[team_id*self.num_robots+i], action[i*2+1], vrep.simx_opmode_oneshot_wait)
@@ -215,16 +234,15 @@ class Enviroment:
 
 
 if __name__ == "__main__":
-	env = Enviroment("127.0.0.1", 19999, 1, 600, 1)
+	env = Enviroment("127.0.0.1", 19999, 1, 9, 1)
 
 	state_size = env.state_size
 	action_size = env.action_size
 	team = env.get_team()
 	team2 = env.get_team()
 	env.reset(team)
-	time.sleep(20)
 	state = env.get_state(team)
-	env.apply_action(team, [-0.1,0.6])
+	env.apply_action(team, [-0.5,0.1])
 	tomei_gol, acabou, reward, result_state = env.get_reward(team, state)
 
 	env.close()
