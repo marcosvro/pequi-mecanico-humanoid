@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import vrep
 import time
+import numpy as np
+import math
 
 class Enviroment:
 	def __init__(self, ip, port, num_robots, max_velocity, num_campos):
@@ -42,7 +44,7 @@ class Enviroment:
 		self.time_step_action = 0.1
 		self.weight_rewards = [0.17, 0.17, 0.33, 0.33]
 
-	def close():
+	def close(self):
 		#não sei
 		vrep.simxFinish(self.clientID)
 
@@ -73,40 +75,40 @@ class Enviroment:
 		init = 0
 		#geting my robots positions
 		for i in range(self.num_robots):
-			ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,my_robots_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
+			ret, pos = vrep.simxGetObjectPosition(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			while ret != vrep.simx_return_ok:
-				ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,my_robots_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
-			state[i*2] = y/self.max_width
-			state[i*2+1] = x/self.max_height
+				ret, pos = vrep.simxGetObjectPosition(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+			state[i*2] = pos[1]/self.max_width
+			state[i*2+1] = pos[0]/self.max_height
 		#geting my robots orientations
 		init += 2*self.num_robots
 		for i in range(self.num_robots):
-			ret,a,b,g = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
+			ret, ori = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			while ret != vrep.simx_return_ok:
-				ret,a,b,g = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
-			state[init+i] = g/180.
+				ret, ori = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+			state[init+i] = ori[2]/180.
 		#geting enemy robots positions
 		init += self.num_robots
 		for i in range(self.num_robots):
-			ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
+			ret,pos = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			while ret != vrep.simx_return_ok:
-				ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
-			state[init+i*2] = y/self.max_width
-			state[init+i*2+1] = x/self.max_height
+				ret,pos = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+			state[init+i*2] = pos[1]/self.max_width
+			state[init+i*2+1] = pos[0]/self.max_height
 		#geting enemy robots orientations
 		init += 2*self.num_robots
 		for i in range(self.num_robots):
-			ret,a,b,g = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
+			ret, ori = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			while ret != vrep.simx_return_ok:
-				ret,a,b,g = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],operationMode=vrep.simx_opmode_oneshot_wait)
-			state[init+i] = g/180.
+				ret, ori = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+			state[init+i] = ori[2]/180.
 		#geting ball position
 		init += self.num_robots
-		ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,ballObjectHandle,operationMode=vrep.simx_opmode_oneshot_wait)
+		ret,pos = vrep.simxGetObjectPosition(self.clientID,self.ballObjectHandle,-1,operationMode=vrep.simx_opmode_oneshot_wait)
 		while ret != vrep.simx_return_ok:
-			ret,x,y,z = vrep.simxGetObjectPosition(self.clientID,ballObjectHandle,operationMode=vrep.simx_opmode_oneshot_wait)
-		state[init] = y/self.max_width
-		state[init+1] = x/self.max_height
+			ret,pos = vrep.simxGetObjectPosition(self.clientID,self.ballObjectHandle,-1,operationMode=vrep.simx_opmode_oneshot_wait)
+		state[init] = pos[1]/self.max_width
+		state[init+1] = pos[0]/self.max_height
 
 
 		if len(last_state) != 0:
@@ -133,18 +135,18 @@ class Enviroment:
 			enemy_id = team_id+1
 		else:
 			enemy_id = team_id-1
-		result_state = self.get_state(last_state)
-		reward = weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)-result_state[2*self.num_robots]*math.pi)
-		reward += weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)**2)/math.sqrt((2*self.width)**2+(2*self.height)**2))
-		reward += weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.height)-math.atan2(y_gol-result_state[int(self.state_size/2)+6*self.num_robots]*self.width, x_gol-result_state[int(self.state_size/2)+6*self.num_robots+1]*self.height))/math.pi)
-		reward += weight_rewards[3]*(1 - math.sqrt((result_state[int(self.state_size/2)+6*self.num_robots]*self.width-y_gol)**2+(result_state[int(self.state_size/2)+6*self.num_robots+1]*self.height-x_gol)**2) / math.sqrt((2*self.width)**2+(2*self.height)**2))
+		result_state = self.get_state(team_id,last_state)
+		reward = self.weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)-result_state[2*self.num_robots]*math.pi)
+		reward += self.weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)**2)/math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
+		reward += self.weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)-math.atan2(y_gol-result_state[int(self.state_size/2)+6*self.num_robots]*self.max_width, x_gol-result_state[int(self.state_size/2)+6*self.num_robots+1]*self.max_height))/math.pi)
+		reward += self.weight_rewards[3]*(1 - math.sqrt((result_state[int(self.state_size/2)+6*self.num_robots]*self.max_width-y_gol)**2+(result_state[int(self.state_size/2)+6*self.num_robots+1]*self.max_height-x_gol)**2) / math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
 
 		acabou = False
 		tomei_gol = False
 		
 		# verifica se alguem fez gol
-		ret0 ,dist_gol_other = vrep.simxReadDistance(self.clientID,golDistHandle[enemy_id],vrep.simx_opmode_oneshot_wait)
-		ret1 ,dist_gol_my = vrep.simxReadDistance(self.clientID,golDistHandle[team_id],vrep.simx_opmode_oneshot_wait)
+		ret0 ,dist_gol_other = vrep.simxReadDistance(self.clientID,self.golDistHandle[enemy_id],vrep.simx_opmode_oneshot_wait)
+		ret1 ,dist_gol_my = vrep.simxReadDistance(self.clientID,self.golDistHandle[team_id],vrep.simx_opmode_oneshot_wait)
 		if ret0 != vrep.simx_return_ok:
 			dist_gol_other = self.min_dist_gol
 		if ret1 != vrep.simx_return_ok:
@@ -184,7 +186,7 @@ class Enviroment:
 				flag = False
 				while not flag:
 					x = 2*(self.max_height-self.raio_robo)*np.random.random() - (self.max_height-self.raio_robo)
-					y = 2*(self.max_width-self.raio_robo)*np.random.random() - (self.max_widthi-self.raio_robo)
+					y = 2*(self.max_width-self.raio_robo)*np.random.random() - (self.max_width-self.raio_robo)
 					flag = True
 					for k in alocados:
 						dist = math.sqrt((k[0]-x)**2+(k[1]-y)**2)
@@ -192,11 +194,11 @@ class Enviroment:
 							flag = False
 							break
 					if flag:
-						alocados.add((x,y,self.z))
+						alocados.append((x,y,self.z))
 			
 			for i in range(self.num_robots):
-				ret = vrep.simxSetObjectPosition(self.clientID, robotObjectHandle[team_id*self.num_robots+i], position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
-				ret1 = vrep.simxSetObjectPosition(self.clientID, robotObjectHandle[enemy_id*self.num_robots+i], position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
+				ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
+				ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
 				if ret != vrep.simx_return_ok or ret1 != vrep.simx_return_ok:
 					exit()
 			return True
@@ -207,9 +209,24 @@ class Enviroment:
 		#aplica ação nos robôs
 		action = action*self.max_velocity
 		for i in range(self.num_robots):
-			ret = vrep.simxSetJointTargetVelocity(self.clientID, leftMotorHandle[team_id*self.num_robots+i], action[i*2], vrep.simx_opmode_oneshot_wait)
-			ret = vrep.simxSetJointTargetVelocity(self.clientID, rightMotorHandle[team_id*self.num_robots+i], action[i*2+1], vrep.simx_opmode_oneshot_wait)
+			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.leftMotorHandle[team_id*self.num_robots+i], action[i*2], vrep.simx_opmode_oneshot_wait)
+			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.rightMotorHandle[team_id*self.num_robots+i], action[i*2+1], vrep.simx_opmode_oneshot_wait)
 
 
+
+if __name__ == "__main__":
+	env = Enviroment("127.0.0.1", 19999, 1, 600, 1)
+
+	state_size = env.state_size
+	action_size = env.action_size
+	team = env.get_team()
+	team2 = env.get_team()
+	env.reset(team)
+	time.sleep(20)
+	state = env.get_state(team)
+	env.apply_action(team, [-0.1,0.6])
+	tomei_gol, acabou, reward, result_state = env.get_reward(team, state)
+
+	env.close()
 
 
