@@ -149,14 +149,14 @@ class Agent(threading.Thread):
 		while episode < EPISODES:
 			team_id = self.env.get_team()
 			while team_id == -1:
-				time.sleep(5)
-				team_id = self.env.get_team()	
+				time.sleep(2)
+				team_id = self.env.get_team()
 
 			camPlay = self.env.reset(team_id)
 			while not camPlay:
 				time.sleep(1)
 				camPlay = self.env.reset(team_id)
-
+			#print ("Time ", team_id, " iniciando partida!!")
 			score = 0
 			state = self.env.get_state(team_id)
 			action = self.get_action(state)
@@ -166,9 +166,11 @@ class Agent(threading.Thread):
 				#next_state, reward, done, _ = env.step(action)
 				#score += reward
 				self.env.apply_action(team_id, action)
+				print ("Ação timer ", team_id, " : ", action)
 				time.sleep(self.env.time_step_action)
 
 				tomou_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
+				score += reward
 				self.memory(state, action, reward)
 
 				if acabou:
@@ -180,7 +182,7 @@ class Agent(threading.Thread):
 				else:
 					state = next_state
 					action = self.get_action(state)
-			
+			time.sleep(1)
 			self.train_episode(tomou_gol)
 
 	# In Policy Gradient, Q function is not available.
@@ -200,9 +202,9 @@ class Agent(threading.Thread):
 	# this is used for calculating discounted rewards
 	def memory(self, state, action, reward):
 		self.states.append(state)
-		act = np.zeros(self.action_size)
-		act[action] = 1
-		self.actions.append(act)
+		#act = np.zeros(self.action_size)
+		#act[action] = 1
+		self.actions.append(action)
 		self.rewards.append(reward)
 
 	# update policy network and value network every episode
@@ -223,13 +225,17 @@ class Agent(threading.Thread):
 		self.states, self.actions, self.rewards = [], [], []
 
 	def get_action(self, state):
+		while self.optimizer[2]:
+			time.sleep(0.5)
+		self.optimizer[2] = True
 		policy = self.actor.predict(np.reshape(state, [1, self.state_size]))[0]
+		self.optimizer[2] = False
 		return policy
 		#return np.random.choice(self.action_size, 1, p=policy)[0]
 
 
 if __name__ == "__main__":
-	env = sim.Enviroment("127.0.0.1", 19999, 1, 9, 1)
+	env = sim.Enviroment("127.0.0.1", 19999, 1, 10, 1, 20)
 
 	state_size = env.state_size
 	action_size = env.action_size

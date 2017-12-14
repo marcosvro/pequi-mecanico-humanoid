@@ -5,7 +5,7 @@ import numpy as np
 import math
 
 class Enviroment:
-	def __init__(self, ip, port, num_robots, max_velocity, num_campos):
+	def __init__(self, ip, port, num_robots, max_velocity, num_campos, tempo_por_partida):
 		self.clientID = vrep.simxStart(ip, port, True, True, 2000, 5)
 		if self.clientID == -1:
 			exit()
@@ -43,7 +43,10 @@ class Enviroment:
 		self.z = 0.0382
 		self.min_dist_gol = 0.13
 		self.num_campos = num_campos
+		self.timers = [0.]*num_campos
+		self.max_time = tempo_por_partida
 		self.campo = [False] * self.num_campos
+		self.semafaro = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
 		self.time_step_action = 0.1
 		self.weight_rewards = [0.17, 0.17, 0.33, 0.33]
@@ -54,7 +57,7 @@ class Enviroment:
 
 	def free_team(self, team_id):
 		self.team[team_id] = 0
-		enemy_id
+		enemy_id = 0
 		if team_id%2 == 0:
 			enemy_id = team_id+1
 		else:
@@ -136,9 +139,9 @@ class Enviroment:
 		enemy_id = 0
 		if team_id%2 != 0:
 			y_gol = -y_gol
-			enemy_id = team_id+1
-		else:
 			enemy_id = team_id-1
+		else:
+			enemy_id = team_id+1
 		result_state = self.get_state(team_id,last_state)
 		reward = self.weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)-result_state[2*self.num_robots]*math.pi)
 		reward += self.weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)**2)/math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
@@ -161,6 +164,8 @@ class Enviroment:
 		elif dist_gol_my < self.min_dist_gol:
 			acabou = True
 			tomei_gol = True
+		elif time.time() > self.timers[int(team_id/2)] or self.team[enemy_id] == 0:
+			acabou = True
 
 		return tomei_gol, acabou, reward, result_state
 			
@@ -171,12 +176,14 @@ class Enviroment:
 			if self.team[i] == 0 and not self.campo[int(i/2)]:
 				self.team[i] = 1
 				indice = i
+				print("Time ", i, " selecionado!!")
 				break
 		return indice
 
 	def reset(self,team_id):
 		if self.campo[int(team_id/2)]:
 			return True
+		
 		enemy_id = 0
 		if team_id%2 == 0:
 			enemy_id = team_id+1
@@ -184,7 +191,11 @@ class Enviroment:
 			enemy_id = team_id-1
 		if self.team[enemy_id] == 1:
 			#RESETAR POSIÇÕES E AÇÃO -----------------------------------------------------------------------------------------------------------
-			self.campo[int(enemy_id/2)] = True
+			if (self.semafaro[int(team_id/2)] and not self.campo[int(team_id/2)]) or self.campo[int(team_id/2)]:
+				return False
+			else:
+				self.semafaro[int(team_id/2)] = True
+
 			alocados = []
 			for i in range(self.num_robots*2+1):
 				flag = False
@@ -218,7 +229,12 @@ class Enviroment:
 					exit()
 			ret = vrep.simxSetObjectPosition(self.clientID, self.ballObjectHandle,-1, position=alocados[-1], operationMode=vrep.simx_opmode_oneshot_wait)
 			if ret != vrep.simx_return_ok:
-				exit()			
+				exit()	
+			#seta timer final
+			self.timers[int(team_id/2)] = time.time()+self.max_time
+			print ("Jogo do campo ", int(team_id/2)," iniciado!!\n")
+			self.campo[int(enemy_id/2)] = True
+			self.semafaro[int(team_id/2)] = False
 			return True
 		else:
 			return False
@@ -226,7 +242,6 @@ class Enviroment:
 	def apply_action(self,team_id, action):
 		#aplica ação nos robôs
 		action = np.array(action)*self.max_velocity
-		print (action)
 		for i in range(self.num_robots):
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.leftMotorHandle[team_id*self.num_robots+i], action[i*2], vrep.simx_opmode_oneshot_wait)
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.rightMotorHandle[team_id*self.num_robots+i], action[i*2+1], vrep.simx_opmode_oneshot_wait)
@@ -234,16 +249,24 @@ class Enviroment:
 
 
 if __name__ == "__main__":
-	env = Enviroment("127.0.0.1", 19999, 1, 9, 1)
+	env = Enviroment("127.0.0.1", 19999, 1, 10, 1, 20)
 
-	state_size = env.state_size
-	action_size = env.action_size
-	team = env.get_team()
-	team2 = env.get_team()
-	env.reset(team)
-	state = env.get_state(team)
-	env.apply_action(team, [1.,1.])
-	tomei_gol, acabou, reward, result_state = env.get_reward(team, state)
+	for i in range(10):
+		state_size = env.state_size
+		action_size = env.action_size
+		team = env.get_team()
+		team2 = env.get_team()
+		env.reset(team)
+		while True:
+			state = env.get_state(team)
+			env.apply_action(team, [1.,1.])
+			env.apply_action(team2, [-1.,-1.])
+			time.sleep(0.1)
+			tomei_gol, acabou, reward, result_state = env.get_reward(team, state)
+			if acabou:
+				break
+		env.free_team(team)
+		env.free_team(team2)
 
 	env.close()
 
