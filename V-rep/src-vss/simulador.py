@@ -35,7 +35,7 @@ class Enviroment:
 			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok or resLeftR != vrep.simx_return_ok or resRightR != vrep.simx_return_ok:
 				exit()
 		self.state_size = (self.num_robots*2 + self.num_robots*2*2 + 2)*2
-		self.action_size = 2*self.num_robots
+		self.action_size = self.num_robots*9
 		self.max_velocity = max_velocity
 		self.max_width = 0.9
 		self.max_height = 0.64
@@ -48,8 +48,9 @@ class Enviroment:
 		self.campo = [False] * self.num_campos
 		self.semafaro = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
-		self.time_step_action = 0.1
+		self.time_step_action = 0.05
 		self.weight_rewards = [0.17, 0.17, 0.33, 0.33]
+		self.actions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,0),(0,1),(1,-1),(1,0),(1,1)]*self.num_robots
 
 	def close(self):
 		#não sei
@@ -149,7 +150,7 @@ class Enviroment:
 		reward += self.weight_rewards[3]*(1 - math.sqrt((result_state[int(self.state_size/2)+6*self.num_robots]*self.max_width-y_gol)**2+(result_state[int(self.state_size/2)+6*self.num_robots+1]*self.max_height-x_gol)**2) / math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
 
 		acabou = False
-		tomei_gol = False
+		fiz_gol = False
 		
 		# verifica se alguem fez gol
 		ret0 ,dist_gol_other = vrep.simxReadDistance(self.clientID,self.golDistHandle[enemy_id],vrep.simx_opmode_oneshot_wait)
@@ -161,13 +162,15 @@ class Enviroment:
 
 		if dist_gol_other < self.min_dist_gol:
 			acabou = True
+			fiz_gol = True
+			self.timers[int(team_id/2)] += self.max_time
 		elif dist_gol_my < self.min_dist_gol:
 			acabou = True
-			tomei_gol = True
+			self.timers[int(team_id/2)] += self.max_time
 		elif time.time() > self.timers[int(team_id/2)] or self.team[enemy_id] == 0:
 			acabou = True
 
-		return tomei_gol, acabou, reward, result_state
+		return fiz_gol, acabou, reward, result_state
 			
 
 	def get_team(self):
@@ -211,8 +214,8 @@ class Enviroment:
 					if flag:
 						alocados.append((x,y,self.z))
 			
-			self.apply_action(team_id, [0.]*self.action_size)
-			self.apply_action(enemy_id, [0.]*self.action_size)
+			self.apply_action(team_id, 4)
+			self.apply_action(enemy_id, 4)
 			for i in range(self.num_robots):
 				ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
 				ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
@@ -227,7 +230,7 @@ class Enviroment:
 				
 				if ret != vrep.simx_return_ok or ret1 != vrep.simx_return_ok or ret2 != vrep.simx_return_ok or ret3 != vrep.simx_return_ok or ret4 != vrep.simx_return_ok or ret5 != vrep.simx_return_ok:
 					exit()
-			ret = vrep.simxSetObjectPosition(self.clientID, self.ballObjectHandle,-1, position=alocados[-1], operationMode=vrep.simx_opmode_oneshot_wait)
+			ret = vrep.simxSetObjectPosition(self.clientID, self.ballObjectHandle,-1, position=[0.,0.,self.z], operationMode=vrep.simx_opmode_oneshot_wait)
 			if ret != vrep.simx_return_ok:
 				exit()	
 			#seta timer final
@@ -239,9 +242,9 @@ class Enviroment:
 		else:
 			return False
 
-	def apply_action(self,team_id, action):
+	def apply_action(self,team_id, action_id):
 		#aplica ação nos robôs
-		action = np.array(action)*self.max_velocity
+		action = np.array(self.actions[action_id])*self.max_velocity
 		for i in range(self.num_robots):
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.leftMotorHandle[team_id*self.num_robots+i], action[i*2], vrep.simx_opmode_oneshot_wait)
 			ret = vrep.simxSetJointTargetVelocity(self.clientID, self.rightMotorHandle[team_id*self.num_robots+i], action[i*2+1], vrep.simx_opmode_oneshot_wait)

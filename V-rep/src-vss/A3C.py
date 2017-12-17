@@ -2,8 +2,9 @@ import threading
 import numpy as np
 import tensorflow as tf
 import time
+import math
 import simulador as sim
-from keras.layers import Dense, Input
+from keras.layers import Dense, Input, LSTM
 from keras.models import Model
 from keras.optimizers import Adam
 from keras import backend as K
@@ -27,7 +28,7 @@ class A3CAgent:
 		self.actor_lr = 0.001
 		self.critic_lr = 0.001
 		self.discount_factor = .99
-		self.hidden1, self.hidden2 = 512, 256
+		self.hidden0, self.hidden1, self.hidden2 = 512, 512, 256
 		self.threads = 2
 
 		# create model for actor and critic network
@@ -46,11 +47,12 @@ class A3CAgent:
 	# critic -> state is input and value of state is output of network
 	# actor and critic network share first hidden layer
 	def build_model(self):
-		state = Input(batch_shape=(None,  self.state_size))
-		shared = Dense(self.hidden1, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_uniform')(state)
+		state = Input(batch_shape=(None, 2,int(self.state_size/2)))
+		lstm_layer = LSTM(self.hidden0, activation='tanh', kernel_initializer='glorot_uniform')(state)
+		shared = Dense(self.hidden1, activation='relu', kernel_initializer='glorot_uniform')(lstm_layer)
 
 		actor_hidden = Dense(self.hidden2, activation='relu', kernel_initializer='glorot_uniform')(shared)
-		action_prob = Dense(self.action_size, activation='tanh', kernel_initializer='glorot_uniform')(actor_hidden)
+		action_prob = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(actor_hidden)
 
 		value_hidden = Dense(self.hidden2, activation='relu', kernel_initializer='he_uniform')(shared)
 		state_value = Dense(1, activation='linear', kernel_initializer='he_uniform')(value_hidden)
@@ -82,6 +84,7 @@ class A3CAgent:
 		entropy = K.sum(policy * K.log(policy + 1e-10), axis=1)
 
 		actor_loss = loss + 0.01*entropy
+		print("Loss : ", actor_loss)
 
 		optimizer = Adam(lr=self.actor_lr)
 		updates = optimizer.get_updates(self.actor.trainable_weights, [], actor_loss)
@@ -103,7 +106,7 @@ class A3CAgent:
 
 	# make agents(local) and start training
 	def train(self):
-		# self.load_model('./save_model/vss_a3c')
+		self.load_model('./save_model/vss_a3c')
 		agents = [Agent(i, self.actor, self.critic, self.optimizer, self.discount_factor, self.action_size, self.state_size, self.env) for i in range(self.threads)]
 
 		for agent in agents:
@@ -160,16 +163,16 @@ class Agent(threading.Thread):
 			score = 0
 			state = self.env.get_state(team_id)
 			action = self.get_action(state)
-			tomou_gol = False
+			fiz_gol = False
 			while True:
 				#action = self.get_action(state)
 				#next_state, reward, done, _ = env.step(action)
 				#score += reward
 				self.env.apply_action(team_id, action)
-				print ("Ação timer ", team_id, " : ", action)
+				print ("Ação time ", team_id, " : ", action)
 				time.sleep(self.env.time_step_action)
 
-				tomou_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
+				fiz_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
 				score += reward
 				self.memory(state, action, reward)
 
@@ -183,16 +186,19 @@ class Agent(threading.Thread):
 					state = next_state
 					action = self.get_action(state)
 			time.sleep(1)
-			self.train_episode(tomou_gol)
+			if math.isnan(score):
+				self.states, self.actions, self.rewards = [], [], []
+			else:
+				self.train_episode(fiz_gol)
 
 	# In Policy Gradient, Q function is not available.
 	# Instead agent uses sample returns for evaluating policy
-	def discount_rewards(self, rewards, tomou_gol=True):
+	def discount_rewards(self, rewards, fiz_gol=False):
 		discounted_rewards = np.zeros_like(rewards)
 		running_add = 0
-		if not tomou_gol:
+		if fiz_gol:
 			#se não tomou gol ainda há recompensa para receber(valor predito por running_add)
-			running_add = self.critic.predict(np.reshape(self.states[-1], (1, self.state_size)))[0]
+			running_add = self.critic.predict(np.reshape(self.states[-1], (1,2, int(self.state_size/2))))[0]
 		for t in reversed(range(0, len(rewards))):
 			running_add = running_add * self.discount_factor + rewards[t]
 			discounted_rewards[t] = running_add
@@ -202,16 +208,16 @@ class Agent(threading.Thread):
 	# this is used for calculating discounted rewards
 	def memory(self, state, action, reward):
 		self.states.append(state)
-		#act = np.zeros(self.action_size)
-		#act[action] = 1
-		self.actions.append(action)
+		act = np.zeros(self.action_size)
+		act[action] = 1
+		self.actions.append(act)
 		self.rewards.append(reward)
 
 	# update policy network and value network every episode
 	def train_episode(self, tomou_gol):
 		discounted_rewards = self.discount_rewards(self.rewards, tomou_gol)
 
-		values = self.critic.predict(np.array(self.states))
+		values = self.critic.predict(np.reshape(self.states, (len(self.states),2, int(self.state_size/2))))
 		values = np.reshape(values, len(values))
 
 		advantages = discounted_rewards - values
@@ -219,23 +225,26 @@ class Agent(threading.Thread):
 		while self.optimizer[2]:
 			time.sleep(0.5)
 		self.optimizer[2] = True
-		self.optimizer[0]([self.states, self.actions, advantages])
-		self.optimizer[1]([self.states, discounted_rewards])
+		self.optimizer[0]([np.reshape(self.states, (len(self.states),2, int(self.state_size/2))), self.actions, advantages])
+		self.optimizer[1]([np.reshape(self.states, (len(self.states),2, int(self.state_size/2))), discounted_rewards])
 		self.optimizer[2] = False
 		self.states, self.actions, self.rewards = [], [], []
 
 	def get_action(self, state):
-		while self.optimizer[2]:
-			time.sleep(0.5)
-		self.optimizer[2] = True
-		policy = self.actor.predict(np.reshape(state, [1, self.state_size]))[0]
-		self.optimizer[2] = False
-		return policy
-		#return np.random.choice(self.action_size, 1, p=policy)[0]
+		try:
+			while self.optimizer[2]:
+				time.sleep(0.5)
+			self.optimizer[2] = True
+			policy = self.actor.predict(np.reshape(state, [1,2, int(self.state_size/2)]))[0]
+			self.optimizer[2] = False
+		except RuntimeWarning:
+			exit("Erro ao buscar ação!!")
+		#return policy
+		return np.random.choice(self.action_size, 1, p=policy)[0]
 
 
 if __name__ == "__main__":
-	env = sim.Enviroment("127.0.0.1", 19999, 1, 10, 1, 20)
+	env = sim.Enviroment("127.0.0.1", 19999, 1, 5, 1, 20)
 
 	state_size = env.state_size
 	action_size = env.action_size
