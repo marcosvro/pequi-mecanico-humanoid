@@ -17,10 +17,13 @@ class Enviroment:
 		self.leftRodaHandle = [0]*self.num_robots*num_campos*2
 		self.rightRodaHandle = [0]*self.num_robots*num_campos*2
 		self.golDistHandle = [0]*num_campos*2
+		self.golObjectHandle = [0]*num_campos*2
 		for i in range(0,num_campos*2, 2):
-			resGolTime0, self.golDistHandle[i] =  vrep.simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i*2),vrep.simx_opmode_oneshot_wait)
-			resGolTime1, self.golDistHandle[i+1] = vrep.simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i*2+1),vrep.simx_opmode_oneshot_wait)
-			if resGolTime0 or resGolTime1:
+			resGolT0, self.golObjectHandle[i] = vrep.simxGetObjectHandle(self.clientID, "gol"+str(i), vrep.simx_opmode_oneshot_wait)
+			resGolT1, self.golObjectHandle[i+1] = vrep.simxGetObjectHandle(self.clientID, "gol"+str(i+1), vrep.simx_opmode_oneshot_wait)
+			resGolTime0, self.golDistHandle[i] =  vrep.simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i),vrep.simx_opmode_oneshot_wait)
+			resGolTime1, self.golDistHandle[i+1] = vrep.simxGetDistanceHandle(self.clientID,"Dist_bola_gol"+str(i+1),vrep.simx_opmode_oneshot_wait)
+			if resGolTime0 != vrep.simx_return_ok or resGolTime1 != vrep.simx_return_ok or resGolT0 != vrep.simx_return_ok or resGolT0 != vrep.simx_return_ok:
 				exit()
 		resBall, self.ballObjectHandle = vrep.simxGetObjectHandle(self.clientID, "bola", vrep.simx_opmode_oneshot_wait)
 		if resBall:
@@ -34,7 +37,7 @@ class Enviroment:
 			resRightR, self.rightRodaHandle[int(i/2)] = vrep.simxGetObjectHandle(self.clientID, "Cylinder"+str(i), vrep.simx_opmode_oneshot_wait)
 			if resLeft != vrep.simx_return_ok or resRight != vrep.simx_return_ok or resBase != vrep.simx_return_ok or resLeftR != vrep.simx_return_ok or resRightR != vrep.simx_return_ok:
 				exit()
-		self.state_size = (self.num_robots*2 + self.num_robots*2*2 + 2)*2
+		self.state_size = self.num_robots*2*2
 		self.action_size = self.num_robots*9
 		self.max_velocity = max_velocity
 		self.max_width = 0.9
@@ -73,13 +76,16 @@ class Enviroment:
 		my_robots_rightMotor = [self.rightMotorHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
 		my_robots_handle = [self.robotOrientationtHandle[team_id*self.num_robots + i] for i in range(self.num_robots)]
 		enemy_robot_handle = []
+		enemy_id = 0
 		if team_id%2==0:
+			enemy_id = team_id+1
 			enemy_robot_handle = [self.robotOrientationtHandle[(team_id+1)*self.num_robots + i] for i in range(self.num_robots)]
 		else :
+			enemy_id = team_id-1
 			enemy_robot_handle = [self.robotOrientationtHandle[(team_id-1)*self.num_robots + i] for i in range(self.num_robots)]
 
 			
-		state = [0.] * (int(self.state_size/2))
+		state = [0.] * 7
 		init = 0
 		#geting my robots positions
 		for i in range(self.num_robots):
@@ -87,14 +93,20 @@ class Enviroment:
 			while ret != vrep.simx_return_ok:
 				ret, pos = vrep.simxGetObjectPosition(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			state[i*2] = pos[1]/self.max_width
+			if math.isnan(state[i*2]):
+				state[i*2] = 0.
 			state[i*2+1] = pos[0]/self.max_height
+			if math.isnan(state[i*2+1]):
+				state[i*2+1] = 0.
 		#geting my robots orientations
 		init += 2*self.num_robots
 		for i in range(self.num_robots):
 			ret, ori = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			while ret != vrep.simx_return_ok:
 				ret, ori = vrep.simxGetObjectOrientation(self.clientID,my_robots_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
-			state[init+i] = ori[2]/180.
+			state[init+i] = ori[2]/math.pi
+			if math.isnan(state[init+i]):
+				state[init+i] = 0.
 		#geting enemy robots positions
 		init += self.num_robots
 		for i in range(self.num_robots):
@@ -102,29 +114,49 @@ class Enviroment:
 			while ret != vrep.simx_return_ok:
 				ret,pos = vrep.simxGetObjectPosition(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 			state[init+i*2] = pos[1]/self.max_width
+			if math.isnan(state[init+i*2]):
+				state[init+i*2] = 0.
 			state[init+i*2+1] = pos[0]/self.max_height
-		#geting enemy robots orientations
-		init += 2*self.num_robots
-		for i in range(self.num_robots):
-			ret, ori = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
-			while ret != vrep.simx_return_ok:
-				ret, ori = vrep.simxGetObjectOrientation(self.clientID,enemy_robot_handle[i],-1,operationMode=vrep.simx_opmode_oneshot_wait)
-			state[init+i] = ori[2]/180.
+			if math.isnan(state[init+i*2+1]):
+				state[init+i*2+1] = 0.
 		#geting ball position
-		init += self.num_robots
+		init += 2*self.num_robots
 		ret,pos = vrep.simxGetObjectPosition(self.clientID,self.ballObjectHandle,-1,operationMode=vrep.simx_opmode_oneshot_wait)
 		while ret != vrep.simx_return_ok:
 			ret,pos = vrep.simxGetObjectPosition(self.clientID,self.ballObjectHandle,-1,operationMode=vrep.simx_opmode_oneshot_wait)
 		state[init] = pos[1]/self.max_width
+		if math.isnan(state[init]):
+				state[init] = 0.
 		state[init+1] = pos[0]/self.max_height
+		if math.isnan(state[init+1]):
+				state[init+1] = 0.
+
+		ret,pos_gol = vrep.simxGetObjectPosition(self.clientID,self.golObjectHandle[enemy_id],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+		while ret != vrep.simx_return_ok:
+			ret,pos_gol = vrep.simxGetObjectPosition(self.clientID,self.golObjectHandle[enemy_id],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+
+		#policy's
+		policy = []
+		policy.append(math.atan2((state[5*self.num_robots]-state[0])*self.max_width,(state[5*self.num_robots+1]-state[1])*self.max_height)-state[2*self.num_robots]*math.pi)
+		policy.append(math.atan2(pos_gol[1]-state[0]*self.max_width,pos_gol[0]-state[1]*self.max_height)-state[2*self.num_robots]*math.pi)
+
+
+		if math.isnan(policy[0]):
+			if len(last_state)!=0:
+				policy[0] = last_state[int(self.state_size/2)]
+			else:
+				policy[0] = 0.
+		if math.isnan(policy[1]):
+			if len(last_state)!=0:
+				policy[1] = last_state[int(self.state_size/2)+1]
+			else:
+				policy[1] = 0.
 
 
 		if len(last_state) != 0:
-			state = last_state[int(self.state_size/2):]+state
+			return state, last_state[int(self.state_size/2):]+policy
 		else:
-			state = state+state
-		
-		return state
+			return policy+policy
 		
 
 	def get_reward(self,team_id, last_state):
@@ -143,11 +175,11 @@ class Enviroment:
 			enemy_id = team_id-1
 		else:
 			enemy_id = team_id+1
-		result_state = self.get_state(team_id,last_state)
-		reward = self.weight_rewards[0]*math.cos(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)-result_state[2*self.num_robots]*math.pi)
-		reward += self.weight_rewards[1]*(1 - math.sqrt(((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width)**2+((result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)**2)/math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
-		reward += self.weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[int(self.state_size/2)+6*self.num_robots]-result_state[int(self.state_size/2)+0])*self.max_width,(result_state[int(self.state_size/2)+6*self.num_robots+1]-result_state[int(self.state_size/2)+1])*self.max_height)-math.atan2(y_gol-result_state[int(self.state_size/2)+6*self.num_robots]*self.max_width, x_gol-result_state[int(self.state_size/2)+6*self.num_robots+1]*self.max_height))/math.pi)
-		reward += self.weight_rewards[3]*(1 - math.sqrt((result_state[int(self.state_size/2)+6*self.num_robots]*self.max_width-y_gol)**2+(result_state[int(self.state_size/2)+6*self.num_robots+1]*self.max_height-x_gol)**2) / math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
+		result_state, final_state = self.get_state(team_id,last_state)
+		reward = self.weight_rewards[0]*math.cos(math.atan2((result_state[5*self.num_robots]-result_state[0])*self.max_width,(result_state[5*self.num_robots+1]-result_state[1])*self.max_height)-result_state[2*self.num_robots]*math.pi)
+		reward += self.weight_rewards[1]*(1 - math.sqrt(((result_state[5*self.num_robots]-result_state[0])*self.max_width)**2+((result_state[5*self.num_robots+1]-result_state[1])*self.max_height)**2)/math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
+		reward += self.weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[5*self.num_robots]-result_state[0])*self.max_width,(result_state[5*self.num_robots+1]-result_state[1])*self.max_height)-math.atan2(y_gol-result_state[5*self.num_robots]*self.max_width, x_gol-result_state[5*self.num_robots+1]*self.max_height))/math.pi)
+		reward += self.weight_rewards[3]*(1 - math.sqrt((result_state[5*self.num_robots]*self.max_width-y_gol)**2+(result_state[5*self.num_robots+1]*self.max_height-x_gol)**2) / math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
 
 		acabou = False
 		fiz_gol = False
@@ -170,7 +202,7 @@ class Enviroment:
 		elif time.time() > self.timers[int(team_id/2)] or self.team[enemy_id] == 0:
 			acabou = True
 
-		return fiz_gol, acabou, reward, result_state
+		return fiz_gol, acabou, reward, final_state
 			
 
 	def get_team(self):
@@ -217,16 +249,24 @@ class Enviroment:
 			self.apply_action(team_id, 4)
 			self.apply_action(enemy_id, 4)
 			for i in range(self.num_robots):
-				ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
-				ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
-				
-				#ret6 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, [-89.,0.,-89.], operationMode=vrep.simx_opmode_oneshot_wait)
-				#ret7 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, [-89.,0.,-89.], operationMode=vrep.simx_opmode_oneshot_wait)
-				
+
+				#ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=alocados[i], operationMode=vrep.simx_opmode_oneshot_wait)
+				#ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=alocados[self.num_robots+i], operationMode=vrep.simx_opmode_oneshot_wait)
+				ret = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, position=[0.,-0.3,self.z], operationMode=vrep.simx_opmode_oneshot_wait)
+				ret1 = vrep.simxSetObjectPosition(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, position=[0., 0.3,self.z], operationMode=vrep.simx_opmode_oneshot_wait)
+
 				ret2 = vrep.simxSetObjectPosition(self.clientID, self.leftRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
 				ret3 = vrep.simxSetObjectPosition(self.clientID, self.rightRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
 				ret4 = vrep.simxSetObjectPosition(self.clientID, self.leftRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
-				ret5 = vrep.simxSetObjectPosition(self.clientID, self.rightRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret5 = vrep.simxSetObjectPosition(self.clientID, self.rightRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)			
+
+				ret2 = vrep.simxSetObjectOrientation(self.clientID, self.leftRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret3 = vrep.simxSetObjectOrientation(self.clientID, self.rightRodaHandle[team_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret4 = vrep.simxSetObjectOrientation(self.clientID, self.leftRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+				ret5 = vrep.simxSetObjectOrientation(self.clientID, self.rightRodaHandle[enemy_id*self.num_robots+i], vrep.sim_handle_parent, [0.,0.,0.], vrep.simx_opmode_oneshot_wait)
+
+				#ret6 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[team_id*self.num_robots+i],-1, [0.,90.,0.], operationMode=vrep.simx_opmode_oneshot_wait)
+				#ret7 = vrep.simxSetObjectOrientation(self.clientID, self.robotObjectHandle[enemy_id*self.num_robots+i],-1, [-89.,0.,-89.], operationMode=vrep.simx_opmode_oneshot_wait)
 				
 				if ret != vrep.simx_return_ok or ret1 != vrep.simx_return_ok or ret2 != vrep.simx_return_ok or ret3 != vrep.simx_return_ok or ret4 != vrep.simx_return_ok or ret5 != vrep.simx_return_ok:
 					exit()

@@ -25,10 +25,10 @@ class A3CAgent:
 		self.action_size = action_size
 
 		# these are hyper parameters for the A3C
-		self.actor_lr = 0.001
-		self.critic_lr = 0.001
-		self.discount_factor = .99
-		self.hidden0, self.hidden1, self.hidden2 = 512, 512, 256
+		self.actor_lr = 0.005
+		self.critic_lr = 0.005
+		self.discount_factor = .95
+		self.hidden0, self.hidden1, self.hidden2 = 50, 50, 25
 		self.threads = 2
 
 		# create model for actor and critic network
@@ -84,7 +84,6 @@ class A3CAgent:
 		entropy = K.sum(policy * K.log(policy + 1e-10), axis=1)
 
 		actor_loss = loss + 0.01*entropy
-		print("Loss : ", actor_loss)
 
 		optimizer = Adam(lr=self.actor_lr)
 		updates = optimizer.get_updates(self.actor.trainable_weights, [], actor_loss)
@@ -106,7 +105,7 @@ class A3CAgent:
 
 	# make agents(local) and start training
 	def train(self):
-		self.load_model('./save_model/vss_a3c')
+		#self.load_model('./save_model/vss_a3c')
 		agents = [Agent(i, self.actor, self.critic, self.optimizer, self.discount_factor, self.action_size, self.state_size, self.env) for i in range(self.threads)]
 
 		for agent in agents:
@@ -235,11 +234,13 @@ class Agent(threading.Thread):
 			while self.optimizer[2]:
 				time.sleep(0.5)
 			self.optimizer[2] = True
+			print ("\n",state)
 			policy = self.actor.predict(np.reshape(state, [1,2, int(self.state_size/2)]))[0]
 			self.optimizer[2] = False
 		except RuntimeWarning:
 			exit("Erro ao buscar ação!!")
 		#return policy
+		print (policy)
 		return np.random.choice(self.action_size, 1, p=policy)[0]
 
 
