@@ -30,6 +30,7 @@ class A3CAgent:
 		self.discount_factor = .95
 		self.hidden0, self.hidden1, self.hidden2 = 50, 50, 25
 		self.threads = 2
+		self.reward_factor = 10
 
 		# create model for actor and critic network
 		self.actor, self.critic = self.build_model()
@@ -105,8 +106,8 @@ class A3CAgent:
 
 	# make agents(local) and start training
 	def train(self):
-		#self.load_model('./save_model/vss_a3c')
-		agents = [Agent(i, self.actor, self.critic, self.optimizer, self.discount_factor, self.action_size, self.state_size, self.env) for i in range(self.threads)]
+		self.load_model('./save_model/vss_a3c')
+		agents = [Agent(i, self.actor, self.critic, self.optimizer, self.discount_factor, self.action_size, self.state_size, self.env, self.reward_factor) for i in range(self.threads)]
 
 		for agent in agents:
 			agent.start()
@@ -126,7 +127,7 @@ class A3CAgent:
 
 # This is Agent(local) class for threading
 class Agent(threading.Thread):
-	def __init__(self, index, actor, critic, optimizer, discount_factor, action_size, state_size, env):
+	def __init__(self, index, actor, critic, optimizer, discount_factor, action_size, state_size, env, reward_factor):
 		threading.Thread.__init__(self)
 
 		self.env = env
@@ -142,6 +143,7 @@ class Agent(threading.Thread):
 		self.discount_factor = discount_factor
 		self.action_size = action_size
 		self.state_size = state_size
+		self.reward_factor = reward_factor
 
 	# Thread interactive with environment
 	def run(self):
@@ -168,10 +170,13 @@ class Agent(threading.Thread):
 				#next_state, reward, done, _ = env.step(action)
 				#score += reward
 				self.env.apply_action(team_id, action)
-				print ("Ação time ", team_id, " : ", action)
+				#print ("Ação time ", team_id, " : ", action)
 				time.sleep(self.env.time_step_action)
 
 				fiz_gol, acabou, reward, next_state = self.env.get_reward(team_id, state)
+				reward = reward*self.reward_factor
+				if team_id==0:
+					print (reward)
 				score += reward
 				self.memory(state, action, reward)
 
@@ -233,19 +238,19 @@ class Agent(threading.Thread):
 		try:
 			while self.optimizer[2]:
 				time.sleep(0.5)
-			self.optimizer[2] = True
-			print ("\n",state)
+			#self.optimizer[2] = True
+			#print ("\n",state)
 			policy = self.actor.predict(np.reshape(state, [1,2, int(self.state_size/2)]))[0]
-			self.optimizer[2] = False
+			#self.optimizer[2] = False
 		except RuntimeWarning:
 			exit("Erro ao buscar ação!!")
 		#return policy
-		print (policy)
+		#print (policy)
 		return np.random.choice(self.action_size, 1, p=policy)[0]
 
 
 if __name__ == "__main__":
-	env = sim.Enviroment("127.0.0.1", 19999, 1, 5, 1, 20)
+	env = sim.Enviroment("127.0.0.1", 19999, 1, 3, 1, 20)
 
 	state_size = env.state_size
 	action_size = env.action_size

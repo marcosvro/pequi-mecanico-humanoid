@@ -51,7 +51,7 @@ class Enviroment:
 		self.campo = [False] * self.num_campos
 		self.semafaro = [False] * self.num_campos
 		self.team = [0] * (self.num_campos * 2)
-		self.time_step_action = 0.05
+		self.time_step_action = 0.01
 		self.weight_rewards = [0.17, 0.17, 0.33, 0.33]
 		self.actions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,0),(0,1),(1,-1),(1,0),(1,1)]*self.num_robots
 
@@ -130,10 +130,16 @@ class Enviroment:
 		state[init+1] = pos[0]/self.max_height
 		if math.isnan(state[init+1]):
 				state[init+1] = 0.
-
+		'''
 		ret,pos_gol = vrep.simxGetObjectPosition(self.clientID,self.golObjectHandle[enemy_id],-1,operationMode=vrep.simx_opmode_oneshot_wait)
 		while ret != vrep.simx_return_ok:
 			ret,pos_gol = vrep.simxGetObjectPosition(self.clientID,self.golObjectHandle[enemy_id],-1,operationMode=vrep.simx_opmode_oneshot_wait)
+		'''
+		x_gol = 0.
+		y_gol = 0.9
+		if team_id%2 != 0:
+			y_gol = -y_gol
+		pos_gol = [x_gol, y_gol]
 
 		#policy's
 		policy = []
@@ -167,7 +173,7 @@ class Enviroment:
 		Mira bola p/ gol  -> 1 - abs(atan2(Ybola-Yrobô, Xbola-Xrobô)-atan2(Ygol-Ybola, Xgol-Xbola))/pi
 		Leva bola p/ gol  -> 1 - DISTÂNCIA_bg/sqrt((2*width)**2+(2*height)**2)
 		'''
-		x_gol = 0
+		x_gol = 0.
 		y_gol = 0.9
 		enemy_id = 0
 		if team_id%2 != 0:
@@ -176,9 +182,17 @@ class Enviroment:
 		else:
 			enemy_id = team_id+1
 		result_state, final_state = self.get_state(team_id,last_state)
-		reward = self.weight_rewards[0]*math.cos(math.atan2((result_state[5*self.num_robots]-result_state[0])*self.max_width,(result_state[5*self.num_robots+1]-result_state[1])*self.max_height)-result_state[2*self.num_robots]*math.pi)
+		reward = self.weight_rewards[0]*(math.cos((math.atan2((result_state[5*self.num_robots]-result_state[0])*self.max_width,(result_state[5*self.num_robots+1]-result_state[1])*self.max_height)-result_state[2*self.num_robots]*math.pi)*2)/2 + 0.5)
 		reward += self.weight_rewards[1]*(1 - math.sqrt(((result_state[5*self.num_robots]-result_state[0])*self.max_width)**2+((result_state[5*self.num_robots+1]-result_state[1])*self.max_height)**2)/math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
-		reward += self.weight_rewards[2]*(1 - math.fabs(math.atan2((result_state[5*self.num_robots]-result_state[0])*self.max_width,(result_state[5*self.num_robots+1]-result_state[1])*self.max_height)-math.atan2(y_gol-result_state[5*self.num_robots]*self.max_width, x_gol-result_state[5*self.num_robots+1]*self.max_height))/math.pi)
+		
+		bola_vector2 = ((result_state[5*self.num_robots]-result_state[0])*self.max_width, (result_state[5*self.num_robots+1]-result_state[1])*self.max_height)
+		gol_vector2 = (y_gol-result_state[0]*self.max_width, x_gol-result_state[1]*self.max_height)
+		produto = bola_vector2[0]*gol_vector2[0]+bola_vector2[1]*gol_vector2[1]
+		modulo_bola = math.sqrt(bola_vector2[0]**2 + bola_vector2[1]**2)
+		modulo_gol = math.sqrt(gol_vector2[0]**2 + gol_vector2[1]**2)
+		cos_angle = min(1,produto/max(1e-10,modulo_bola*modulo_gol))
+
+		reward += self.weight_rewards[2]*math.acos(cos_angle)/math.pi
 		reward += self.weight_rewards[3]*(1 - math.sqrt((result_state[5*self.num_robots]*self.max_width-y_gol)**2+(result_state[5*self.num_robots+1]*self.max_height-x_gol)**2) / math.sqrt((2*self.max_width)**2+(2*self.max_height)**2))
 
 		acabou = False
